@@ -25,10 +25,12 @@ struct TempStoreTests {
             try? FileManager.default.removeItem(at: fresh)
             try? FileManager.default.removeItem(at: stale)
         }
-        // Backdate the stale dir's creationDate by 1 week. `.creationDate`
-        // is settable via setAttributes on Apple platforms.
+        // Backdate the stale dir's modification date by 1 week. `.modificationDate`
+        // is settable via setAttributes on both Apple and Linux (utimensat),
+        // unlike `.creationDate` which Linux ignores. `cleanupAged` keys off
+        // modification date for the same portability reason.
         let oneWeekAgo = Date().addingTimeInterval(-7 * 24 * 3600)
-        try FileManager.default.setAttributes([.creationDate: oneWeekAgo],
+        try FileManager.default.setAttributes([.modificationDate: oneWeekAgo],
                                               ofItemAtPath: stale.path)
 
         await TempStore.cleanupAged(olderThan: 24 * 3600)

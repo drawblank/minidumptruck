@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(os)
 import os
+#endif
 
 /// Orchestrates "fetch PDBs for every module in a parsed dump, parse
 /// them, and hand back a `[baseAddress: PDBSymbolTable]` map" — the

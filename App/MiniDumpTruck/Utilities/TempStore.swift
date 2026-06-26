@@ -50,21 +50,27 @@ public enum TempStore {
         return path.lowercased()
     }
 
-    /// Delete any `zip-*` subdirectory of the cache root whose creation
+    /// Delete any `zip-*` subdirectory of the cache root whose modification
     /// date is older than `olderThan` seconds. Best-effort: never throws.
+    ///
+    /// Keyed on modification rather than creation date for portability:
+    /// Linux filesystems don't reliably expose (or let us set) a btime, so a
+    /// creation-date check would silently never fire there. These dirs are
+    /// written once at extraction and not touched after, so mtime tracks
+    /// their age just as well.
     public static func cleanupAged(olderThan: TimeInterval) async {
         let fm = FileManager.default
         let root = root()
         guard let entries = try? fm.contentsOfDirectory(at: root,
-                                                        includingPropertiesForKeys: [.creationDateKey],
+                                                        includingPropertiesForKeys: [.contentModificationDateKey],
                                                         options: [.skipsHiddenFiles]) else {
             return
         }
         let cutoff = now().addingTimeInterval(-olderThan)
         for entry in entries {
             guard entry.lastPathComponent.hasPrefix("zip-") else { continue }
-            let values = try? entry.resourceValues(forKeys: [.creationDateKey])
-            guard let ctime = values?.creationDate, ctime < cutoff else { continue }
+            let values = try? entry.resourceValues(forKeys: [.contentModificationDateKey])
+            guard let mtime = values?.contentModificationDate, mtime < cutoff else { continue }
             try? fm.removeItem(at: entry)
         }
     }

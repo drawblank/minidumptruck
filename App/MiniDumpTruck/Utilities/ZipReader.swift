@@ -1,5 +1,9 @@
 import Foundation
+#if canImport(Compression)
 import Compression
+#else
+import CZlib
+#endif
 
 /// Compression methods we support reading from a ZIP archive.
 public enum CompressionMethod: UInt16, Sendable {
@@ -173,20 +177,60 @@ public struct ZipArchive: Sendable {
         }
     }
 
-    /// Inflate a raw deflate stream (no zlib header) using Compression.framework.
+    /// Inflate a raw deflate stream (no zlib header) to exactly
+    /// `uncompressedSize` bytes. The platform backend differs (Apple's
+    /// Compression.framework vs. system zlib) but both consume the same
+    /// headerless RFC 1951 stream a ZIP entry stores.
     private static func inflate(_ compressed: Data, uncompressedSize: Int) throws -> Data {
         if uncompressedSize == 0 { return Data() }
         var dst = Data(count: uncompressedSize)
-        let produced = compressed.withUnsafeBytes { srcPtr -> Int in
+        let produced = try rawInflate(compressed, into: &dst, uncompressedSize: uncompressedSize)
+        if produced != uncompressedSize {
+            throw ZipError.corrupted(reason: "DEFLATE produced \(produced) bytes, expected \(uncompressedSize)")
+        }
+        return dst
+    }
+
+#if canImport(Compression)
+    /// Raw-DEFLATE inflate via Apple's libcompression. Despite the name,
+    /// `COMPRESSION_ZLIB` consumes a headerless raw deflate stream (RFC
+    /// 1951) — exactly what a ZIP entry stores.
+    private static func rawInflate(_ compressed: Data, into dst: inout Data, uncompressedSize: Int) throws -> Int {
+        compressed.withUnsafeBytes { srcPtr -> Int in
             let src = srcPtr.bindMemory(to: UInt8.self).baseAddress!
             return dst.withUnsafeMutableBytes { dstPtr -> Int in
                 let dstP = dstPtr.bindMemory(to: UInt8.self).baseAddress!
                 return compression_decode_buffer(dstP, uncompressedSize, src, compressed.count, nil, COMPRESSION_ZLIB)
             }
         }
-        if produced != uncompressedSize {
-            throw ZipError.corrupted(reason: "DEFLATE produced \(produced) bytes, expected \(uncompressedSize)")
-        }
-        return dst
     }
+#else
+    /// Raw-DEFLATE inflate via system zlib (Linux/Windows). Window bits of
+    /// -15 select the raw (headerless) deflate format ZIP uses; the macro
+    /// `inflateInit2` isn't importable, so we call the `inflateInit2_` ABI
+    /// entry point it expands to.
+    private static func rawInflate(_ compressed: Data, into dst: inout Data, uncompressedSize: Int) throws -> Int {
+        var stream = z_stream()
+        guard inflateInit2_(&stream, -15, zlibVersion(), Int32(MemoryLayout<z_stream>.size)) == Z_OK else {
+            throw ZipError.corrupted(reason: "zlib inflateInit2 failed")
+        }
+        defer { inflateEnd(&stream) }
+
+        return try compressed.withUnsafeBytes { srcPtr -> Int in
+            let src = srcPtr.bindMemory(to: UInt8.self).baseAddress
+            return try dst.withUnsafeMutableBytes { dstPtr -> Int in
+                let dstP = dstPtr.bindMemory(to: UInt8.self).baseAddress
+                stream.next_in = UnsafeMutablePointer(mutating: src)
+                stream.avail_in = uInt(compressed.count)
+                stream.next_out = dstP
+                stream.avail_out = uInt(uncompressedSize)
+                let status = CZlib.inflate(&stream, Z_FINISH)
+                guard status == Z_STREAM_END || status == Z_OK else {
+                    throw ZipError.corrupted(reason: "zlib inflate failed with status \(status)")
+                }
+                return uncompressedSize - Int(stream.avail_out)
+            }
+        }
+    }
+#endif
 }

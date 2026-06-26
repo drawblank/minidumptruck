@@ -1,3 +1,8 @@
+// SecTrust-based certificate pinning is Apple-only (see SymbolServerTrust),
+// so this whole suite — including makeSession's delegate wiring — only
+// applies where Security is available. The cross-platform SHA-256 helper is
+// still exercised here on Apple; off-Apple builds skip the file entirely.
+#if canImport(Security)
 import Foundation
 import Testing
 import Security
@@ -96,3 +101,4 @@ struct SymbolServerTrustTests {
         #expect(b.count == 32)
     }
 }
+#endif

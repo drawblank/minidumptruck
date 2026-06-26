@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(os)
 import os
+#endif
 
 /// On-disk cache for PDBs downloaded from a Microsoft symbol server.
 ///

@@ -1,6 +1,14 @@
 import Foundation
-import CommonCrypto
+import Crypto
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+#if canImport(Security)
+import Security
+#endif
+#if canImport(os)
 import os
+#endif
 
 /// TLS server-trust evaluation hooks for `SymbolServer`.
 ///
@@ -65,6 +73,7 @@ final class SymbolServerTrustDelegate: NSObject, URLSessionDelegate, @unchecked 
         super.init()
     }
 
+#if canImport(Security)
     func urlSession(_ session: URLSession,
                     didReceive challenge: URLAuthenticationChallenge,
                     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
@@ -112,16 +121,14 @@ final class SymbolServerTrustDelegate: NSObject, URLSessionDelegate, @unchecked 
         let der = SecCertificateCopyData(cert) as Data
         return der.isEmpty ? nil : sha256(der)
     }
+#endif
 
     /// SHA-256 of arbitrary bytes. Split out from `certificateSHA256`
     /// so tests can pin the hashing logic against known inputs
     /// without needing to materialize a real `SecCertificate` (which
-    /// requires valid X.509 DER).
+    /// requires valid X.509 DER). Uses swift-crypto so it builds on
+    /// every platform; the Apple-only `certificateSHA256` feeds it DER.
     static func sha256(_ data: Data) -> Data {
-        var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
-        data.withUnsafeBytes { buf in
-            _ = CC_SHA256(buf.baseAddress, CC_LONG(buf.count), &hash)
-        }
-        return Data(hash)
+        Data(SHA256.hash(data: data))
     }
 }

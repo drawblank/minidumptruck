@@ -1,5 +1,10 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+#if canImport(os)
 import os
+#endif
 
 /// Fetches PDBs from a Microsoft symbol server (default: msdl.microsoft.com).
 ///
@@ -53,13 +58,27 @@ public actor SymbolServer {
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 15
         config.timeoutIntervalForResource = 30
+        // `waitsForConnectivity` is settable only on Apple's Foundation;
+        // swift-corelibs-foundation exposes it read-only. The timeouts above
+        // already bound a stalled request, so skipping it off-Apple is safe.
+        #if !canImport(FoundationNetworking)
         config.waitsForConnectivity = false
+        #endif
         if case .systemTrust = trustPolicy {
             // No delegate needed — saves a SessionDelegate instance.
             return URLSession(configuration: config)
         }
+        #if canImport(Security)
         let delegate = SymbolServerTrustDelegate(policy: trustPolicy)
         return URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
+        #else
+        // Certificate pinning is enforced through a SecTrust evaluation in
+        // the URLSession delegate; SecTrust is Apple-only. Rather than hand
+        // back a session that silently fails to pin (the exact MitM hole the
+        // feature exists to close), refuse loudly. `.systemTrust` works on
+        // every platform.
+        preconditionFailure("Certificate pinning (.pinCertificateSHA256) requires SecTrust, which is unavailable on this platform. Use .systemTrust.")
+        #endif
     }
 
     public init(baseURL: URL = SymbolServer.microsoftPublicURL,
