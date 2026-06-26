@@ -23,6 +23,12 @@ struct RootView: View {
     @State var errorText: String?
     @State var selected: GUISection?
 
+    /// Server-fetched PDB symbol tables (keyed by module base), and whether a
+    /// fetch is in flight. Populated best-effort from MSDL; failures leave the
+    /// dict empty and the analyzer falls back to module+offset.
+    @State var pdbTables: [UInt64: PDBSymbolTable] = [:]
+    @State var isResolving = false
+
     @Environment(\.chooseFile) var chooseFile
     @Environment(\.chooseFileSaveDestination) var chooseSave
 
@@ -50,6 +56,10 @@ struct RootView: View {
         } detail: {
             detail
         }
+        // Re-run (and cancel the previous) whenever the open file changes.
+        .task(id: loaded?.fileName) {
+            await resolveSymbols()
+        }
     }
 
     // MARK: Sidebar
@@ -67,6 +77,12 @@ struct RootView: View {
                     Button("Export CSV") { Task { await exportCSV() } }
                 }
                 .padding(8)
+
+                if isResolving {
+                    Text("Resolving symbols…")
+                        .foregroundColor(.gray)
+                        .padding(8)
+                }
 
                 List(loaded.dump.visibleSections, selection: $selected) { section in
                     HStack(spacing: 8) {
@@ -126,7 +142,7 @@ struct RootView: View {
         case .exception:
             if let e = dump.exception { ExceptionSection(exc: e) } else { unavailable }
         case .analyze:
-            AnalyzeSection(dump: dump)
+            AnalyzeSection(dump: dump, pdbTables: pdbTables, isResolving: isResolving)
         case .threads:
             ThreadsSection(dump: dump)
         case .modules:
@@ -176,6 +192,19 @@ struct RootView: View {
         guard let url = await chooseSave(defaultFileName: "crash-data.csv") else { return }
         let csv = CSVExporter.generateCSV(from: dump)
         try? csv.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    /// Best-effort PDB symbol resolution for the open dump. Network failures
+    /// are silent — the dict stays empty and the analyzer degrades to
+    /// module+offset. Cancelled automatically when the open file changes.
+    func resolveSymbols() async {
+        guard let loaded else { return }
+        pdbTables = [:]
+        isResolving = true
+        defer { isResolving = false }
+        let service = SymbolicationService(cache: SymbolCache(), server: SymbolServer())
+        let tables = await service.loadSymbols(for: loaded.dump)
+        pdbTables = tables
     }
 
     static func load(_ url: URL) -> LoadOutcome {

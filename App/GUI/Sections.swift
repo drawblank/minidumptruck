@@ -149,10 +149,16 @@ struct ExceptionSection: View {
 
 struct AnalyzeSection: View {
     let dump: ParsedMinidump
+    var pdbTables: [UInt64: PDBSymbolTable] = [:]
+    var isResolving = false
 
     var body: some View {
         DetailPage("Analyze") {
-            if let analysis = CrashAnalyzer(dump: dump).analyze() {
+            if isResolving {
+                Text("Resolving symbols… (call stack will refine when done)")
+                    .foregroundColor(.gray)
+            }
+            if let analysis = CrashAnalyzer(dump: dump, pdbTables: pdbTables).analyze() {
                 GroupBox("Verdict") {
                     LabeledRow("Exception", analysis.crashSummary.exceptionType)
                     if let blame = analysis.blameModule {
