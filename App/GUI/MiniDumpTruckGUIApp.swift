@@ -1,54 +1,25 @@
 import DefaultBackend
-import Foundation
-import MiniDumpTruckCore
 import SwiftCrossUI
 
-/// Vertical-slice cross-platform GUI.
+/// Cross-platform GUI entry point. The in-progress portable replacement for the
+/// macOS SwiftUI app: a sidebar of analysis sections + detail panes, all driven
+/// by `MiniDumpTruckCore`. Backed by GTK4 on Linux / WinUI on Windows / AppKit
+/// on macOS via swift-cross-ui's `DefaultBackend`.
 ///
-/// Loads a `.dmp` passed on the command line and renders the same text report
-/// the CLI produces — proving the swift-cross-ui toolchain end to end on Linux
-/// (GTK4). This is the skeleton the full view port grows on top of; the
-/// macOS SwiftUI views get ported to swift-cross-ui incrementally from here,
-/// and the AppKit backend is folded in at the unification step.
+/// An optional `.dmp` path on the command line opens that dump at launch;
+/// otherwise use the in-app "Open .dmp…" button.
 @main
 struct MiniDumpTruckGUIApp: App {
-    let windowTitle: String
-    let report: String
+    let initialPath: String?
 
     init() {
-        guard let path = CommandLine.arguments.dropFirst().first else {
-            windowTitle = "MiniDumpTruck"
-            report = """
-                Open a crash dump by passing a .dmp path:
-
-                    MiniDumpTruckGUI <file.dmp>
-                """
-            return
-        }
-
-        let url = URL(fileURLWithPath: path)
-        windowTitle = "MiniDumpTruck — \(url.lastPathComponent)"
-        do {
-            let data = try Data(contentsOf: url)
-            let dump = try MinidumpParser.parse(data: data)
-            report = TextReporter.generateReport(
-                from: dump,
-                analysis: nil,
-                fileName: url.lastPathComponent
-            )
-        } catch {
-            report = "Failed to open \(url.lastPathComponent):\n\n\(error.localizedDescription)"
-        }
+        initialPath = CommandLine.arguments.dropFirst().first
     }
 
     var body: some Scene {
-        WindowGroup(windowTitle) {
-            ScrollView {
-                Text(report)
-                    .fontDesign(.monospaced)
-                    .padding()
-            }
+        WindowGroup("MiniDumpTruck") {
+            RootView(initialPath: initialPath)
         }
-        .defaultSize(width: 820, height: 620)
+        .defaultSize(width: 980, height: 680)
     }
 }
