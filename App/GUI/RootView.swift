@@ -24,6 +24,7 @@ struct RootView: View {
     @State var selected: GUISection?
 
     @Environment(\.chooseFile) var chooseFile
+    @Environment(\.chooseFileSaveDestination) var chooseSave
 
     init(initialPath: String?) {
         if let initialPath {
@@ -61,6 +62,12 @@ struct RootView: View {
             .padding(8)
 
             if let loaded {
+                HStack(spacing: 6) {
+                    Button("Export HTML") { Task { await exportHTML() } }
+                    Button("Export CSV") { Task { await exportCSV() } }
+                }
+                .padding(8)
+
                 List(loaded.dump.visibleSections, selection: $selected) { section in
                     HStack(spacing: 8) {
                         Text(section.rawValue)
@@ -154,6 +161,21 @@ struct RootView: View {
             errorText = e
             loaded = nil
         }
+    }
+
+    func exportHTML() async {
+        guard let dump = loaded?.dump else { return }
+        guard let url = await chooseSave(defaultFileName: "crash-report.html") else { return }
+        let analysis = CrashAnalyzer(dump: dump).analyze()
+        let html = HTMLExporter.generateReport(from: dump, analysis: analysis)
+        try? html.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    func exportCSV() async {
+        guard let dump = loaded?.dump else { return }
+        guard let url = await chooseSave(defaultFileName: "crash-data.csv") else { return }
+        let csv = CSVExporter.generateCSV(from: dump)
+        try? csv.write(to: url, atomically: true, encoding: .utf8)
     }
 
     static func load(_ url: URL) -> LoadOutcome {

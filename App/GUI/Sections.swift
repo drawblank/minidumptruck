@@ -258,16 +258,36 @@ struct HandlesSection: View {
 
 struct MemorySection: View {
     let dump: ParsedMinidump
+    @State private var selectedRegionId: UUID?
 
     var body: some View {
-        ListPage("Memory regions (\(dump.memoryRegions.count))") {
-            ForEach(dump.memoryRegions, id: \.id) { region in
-                HStack(spacing: 12) {
-                    Text(addr(region.baseAddress))
-                        .fontDesign(.monospaced)
-                    Spacer()
-                    Text(ByteCountFormatter.string(fromByteCount: Int64(region.regionSize), countStyle: .memory))
-                        .foregroundColor(.gray)
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Memory regions (\(dump.memoryRegions.count))")
+                .font(.system(size: 22))
+                .fontWeight(.bold)
+                .padding(16)
+
+            HStack(spacing: 0) {
+                List(dump.memoryRegions, selection: $selectedRegionId) { region in
+                    HStack(spacing: 8) {
+                        Text(addr(region.baseAddress))
+                            .fontDesign(.monospaced)
+                        Spacer()
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(region.regionSize), countStyle: .memory))
+                            .foregroundColor(.gray)
+                    }
+                }
+                .frame(minWidth: 320)
+
+                if let id = selectedRegionId,
+                   let region = dump.memoryRegions.first(where: { $0.id == id }) {
+                    HexDumpPane(dump: dump, region: region)
+                } else {
+                    VStack {
+                        Text("Select a region to view its bytes")
+                            .foregroundColor(.gray)
+                    }
+                    .padding(16)
                 }
             }
         }
