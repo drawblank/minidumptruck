@@ -268,13 +268,19 @@ struct MemorySection: View {
                 .padding(16)
 
             HStack(spacing: 0) {
-                List(dump.memoryRegions, selection: $selectedRegionId) { region in
-                    HStack(spacing: 8) {
-                        Text(addr(region.baseAddress))
-                            .fontDesign(.monospaced)
-                        Spacer()
-                        Text(ByteCountFormatter.string(fromByteCount: Int64(region.regionSize), countStyle: .memory))
-                            .foregroundColor(.gray)
+                // A swift-cross-ui `List` is a plain GtkListBox — it does NOT
+                // scroll itself, so a long region list would otherwise push the
+                // window's height past the screen. Wrap it in a ScrollView (the
+                // NotesExample pattern) so it scrolls within a bounded height.
+                ScrollView {
+                    List(dump.memoryRegions, selection: $selectedRegionId) { region in
+                        HStack(spacing: 8) {
+                            Text(addr(region.baseAddress))
+                                .fontDesign(.monospaced)
+                            Spacer()
+                            Text(ByteCountFormatter.string(fromByteCount: Int64(region.regionSize), countStyle: .memory))
+                                .foregroundColor(.gray)
+                        }
                     }
                 }
                 .frame(minWidth: 320)
