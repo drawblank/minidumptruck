@@ -19,6 +19,10 @@ struct MiniDumpTruckGUIApp: App {
     var body: some Scene {
         WindowGroup("MiniDumpTruck") {
             RootView(initialPath: initialPath)
+                // The GTK backend doesn't auto-follow the system dark mode, so
+                // align swift-cross-ui's color scheme with the desktop — otherwise
+                // unset text resolves to black on a dark theme.
+                .colorScheme(systemColorScheme())
         }
         .defaultSize(width: 980, height: 680)
     }
