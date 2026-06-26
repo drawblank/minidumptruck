@@ -1,0 +1,64 @@
+{
+  "project": "MiniDumpTruck",
+  "generated": "2026-06-26",
+  "branch": "cross-platform-gui",
+  "description": "Analyzer for Windows crash dumps (.dmp). WinDbg-like !analyze without Windows. Cross-platform core + CLI (macOS/Linux), macOS SwiftUI app, and an in-progress cross-platform GTK4 GUI.",
+  "language": "Swift 5.9+ (Linux tested on 6.3)",
+  "platforms": ["macOS 14+", "Linux (Swift 6.x, GTK4 for the GUI)"],
+  "packageManifest": "App/Package.swift",
+  "productsByHost": {
+    "all": ["MiniDumpTruckCore (library)", "minidumptruck-cli (executable)"],
+    "macOS": ["MiniDumpTruck (SwiftUI app)"],
+    "non-macOS": ["MiniDumpTruckGUI (swift-cross-ui app, Linux/GTK4)"]
+  },
+  "entryPoints": {
+    "macosApp": "App/MiniDumpTruck/MiniDumpTruckApp.swift",
+    "crossPlatformGui": "App/GUI/MiniDumpTruckGUIApp.swift",
+    "cli": "App/CLI/MinidumptruckCLI.swift",
+    "parser": "App/MiniDumpTruck/Parsers/MinidumpParser.swift",
+    "analyzer": "App/MiniDumpTruck/Services/CrashAnalyzer.swift"
+  },
+  "cli": {
+    "commandName": "minidumptruck-cli",
+    "subcommands": ["analyze", "export", "info"],
+    "defaultSubcommand": "analyze"
+  },
+  "moduleCounts": {
+    "Models": 21, "Parsers": 3, "Services": 17, "Utilities": 11,
+    "Views": 20, "ViewModels": 1, "CLI": 7, "GUI": 7, "Tests": 57
+  },
+  "gui": {
+    "path": "App/GUI",
+    "toolkit": "stackotter/swift-cross-ui (GTK4 on Linux)",
+    "files": ["MiniDumpTruckGUIApp", "RootView", "Sections", "HexDump", "Shims", "SystemAppearance", "DumpAccessors"],
+    "features": ["3-pane NavigationSplitView", "10 analysis sections", "memory hex view", "HTML/CSV export", "system dark-mode following", "live PDB symbolication via MSDL"]
+  },
+  "crossPlatform": {
+    "portableTargets": ["MiniDumpTruckCore", "MiniDumpTruckCLI", "MiniDumpTruckGUI"],
+    "macOSOnly": ["MiniDumpTruck (SwiftUI app)"],
+    "decisions": {
+      "logging": "import os guarded by canImport(os); stderr Logger shim off-Apple",
+      "sha256": "swift-crypto (CryptoKit on Apple, BoringSSL off-Apple); replaced CommonCrypto",
+      "zipDeflate": "Compression.framework on Apple; system zlib via CZlib off-Apple",
+      "urlSession": "FoundationNetworking imported off-Apple",
+      "tlsPinning": "SecTrust pinning Apple-only; .systemTrust works everywhere",
+      "tempStore": "cleanupAged keys off modification date (Linux btime unreliable)",
+      "guiDarkMode": "detect system preference, apply .colorScheme (swift-cross-ui GTK backend doesn't bridge it)"
+    }
+  },
+  "dependencies": [
+    { "name": "swift-argument-parser", "version": "1.7.0", "constraint": "exact", "purpose": "CLI parsing" },
+    { "name": "swift-crypto", "version": "3.0.0..<5.0.0", "purpose": "cross-platform SHA-256" },
+    { "name": "swift-cross-ui", "version": "0.1.0+", "purpose": "cross-platform GUI toolkit" }
+  ],
+  "systemLibraries": ["CZlib (links system zlib, off-Apple only)"],
+  "build": {
+    "debug": "cd App && swift build",
+    "release": "cd App && swift build -c release",
+    "test": "cd App && swift test",
+    "cliRun": "cd App && swift run minidumptruck-cli analyze TestData/full-dump.dmp",
+    "guiRun": "cd App && swift run MiniDumpTruckGUI TestData/full-dump.dmp"
+  },
+  "tests": { "files": 57, "passing": { "linux": 839, "macOS": 846 }, "note": "Apple-only TLS-pinning suite gated off-Apple" },
+  "license": "GPLv3"
+}

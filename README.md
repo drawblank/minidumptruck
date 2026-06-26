@@ -4,6 +4,8 @@
 
 A native macOS application — and companion CLI — for analyzing Windows crash dump files (`.dmp`). Get WinDbg-style crash analysis without needing Windows or WinDbg.
 
+The analysis core (`MiniDumpTruckCore`) and the `minidumptruck-cli` tool also build and run on **Linux**, and an experimental cross-platform **GUI** runs there on GTK 4 — see [Cross-platform (Linux)](#cross-platform-linux) below.
+
 ![MiniDumpTruck Summary View](screenshots/crash-summary.png)
 
 ## Why
@@ -30,6 +32,32 @@ Analyzing Windows crash dumps on macOS has traditionally meant wrestling with Go
 - `export` — write reports as text, HTML, CSV, or JSON
 - `info` — quick triage summary
 - Documented exit codes so CI / scripts can branch on "no crash" vs "crash detected" vs "parse failure"
+
+## Cross-platform (Linux)
+
+The non-UI core (`MiniDumpTruckCore`) and the `minidumptruck-cli` tool build, run, and test on Linux as well as macOS — the macOS SwiftUI desktop app stays macOS-only. The package excludes the SwiftUI app from the build on non-Apple hosts automatically.
+
+Requirements: Swift 6.x (tested with 6.3). SwiftPM resolves `swift-crypto` and `swift-argument-parser`; the ZIP path links system `zlib`.
+
+```bash
+cd App
+swift build                       # builds Core + CLI (macOS app excluded off-Apple)
+swift test                        # portable test suite (839 tests on Linux)
+swift run minidumptruck-cli analyze crash.dmp
+```
+
+Platform-specific bits are handled behind `#if canImport(...)` guards: SHA-256 uses [swift-crypto](https://github.com/apple/swift-crypto) off-Apple (CommonCrypto on macOS); ZIP DEFLATE uses system `zlib` off-Apple (`Compression.framework` on macOS); `URLSession` comes from `FoundationNetworking`. TLS certificate **pinning** for the symbol server is Apple-only (`SecTrust`); the default system-trust path — and therefore PDB symbolication — works on every platform.
+
+### Cross-platform GUI (experimental)
+
+A [swift-cross-ui](https://github.com/stackotter/swift-cross-ui) port of the desktop app, `MiniDumpTruckGUI`, runs on Linux (GTK 4) over the same `MiniDumpTruckCore`: sidebar sections, a memory hex viewer, HTML/CSV export, system dark-mode following, and live PDB symbolication from the Microsoft symbol server. The macOS SwiftUI app is unchanged; the cross-platform GUI is being grown toward parity to eventually replace it (folding in the macOS/AppKit backend).
+
+Requirements (Linux): GTK 4 development libraries.
+
+```bash
+cd App
+swift run MiniDumpTruckGUI crash.dmp      # or launch and use "Open .dmp…"
+```
 
 ## Screenshots
 
@@ -176,7 +204,7 @@ minidumptruck-cli help
   - ARM64: AAPCS64 frame-record chain at `[FP]` / `[FP+8]`, then heuristic scan
   - Cross-architecture seen-address dedup; each frame is tagged with its confidence (high / medium / low)
 - Symbolication: Microsoft public symbol server fetch + a Swift PDB / MSF parser (subset — enough to resolve public symbols for `module!function+offset` rendering)
-- Swift Package layout: `MiniDumpTruckCore` library (parser + models + services), `MiniDumpTruck` executable (SwiftUI app), `minidumptruck-cli` executable
+- Swift Package layout: `MiniDumpTruckCore` library (parser + models + services), `minidumptruck-cli` executable, `MiniDumpTruck` executable (SwiftUI app, macOS only), `MiniDumpTruckGUI` executable (swift-cross-ui, non-Apple/GTK4)
 
 The project has 846 tests across 117 suites. Run `swift test` from `App/` to execute them.
 
