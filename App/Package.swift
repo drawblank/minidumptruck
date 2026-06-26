@@ -85,6 +85,23 @@ targets.append(
         ]
     )
 )
+#else
+// swift-cross-ui GUI, the in-progress portable replacement for the SwiftUI
+// app. Scoped off-macOS for now so the polished macOS app and its CI stay
+// untouched until this reaches parity; the macOS (AppKit) backend gets folded
+// in at the unification step.
+products.append(.executable(name: "MiniDumpTruckGUI", targets: ["MiniDumpTruckGUI"]))
+targets.append(
+    .executableTarget(
+        name: "MiniDumpTruckGUI",
+        dependencies: [
+            "MiniDumpTruckCore",
+            .product(name: "SwiftCrossUI", package: "swift-cross-ui"),
+            .product(name: "DefaultBackend", package: "swift-cross-ui")
+        ],
+        path: "GUI"
+    )
+)
 #endif
 
 let package = Package(
@@ -98,7 +115,11 @@ let package = Package(
         // Cross-platform SHA-256 (CryptoKit on Apple, BoringSSL on Linux).
         // Replaces CommonCrypto so the symbol-server trust hashing builds
         // off-Apple.
-        .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0"..<"5.0.0")
+        .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0"..<"5.0.0"),
+        // SwiftUI-like cross-platform GUI toolkit. Backs MiniDumpTruckGUI with
+        // GTK4 on Linux / WinUI on Windows / AppKit on macOS. The eventual
+        // single GUI codebase that replaces the macOS-only SwiftUI app.
+        .package(url: "https://github.com/stackotter/swift-cross-ui", from: "0.1.0")
     ],
     targets: targets
 )
